@@ -295,6 +295,9 @@ pub struct Stream {
 
     /// Send-side stream buffer.
     pub send: SendBuf,
+
+    /// Application data.
+    pub data: Option<Box<dyn std::any::Any>>,
 }
 
 impl Stream {
@@ -303,6 +306,7 @@ impl Stream {
         Stream {
             recv: RecvBuf::new(max_rx_data),
             send: SendBuf::new(max_tx_data),
+            data: None,
         }
     }
 
