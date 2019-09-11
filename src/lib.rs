@@ -1764,7 +1764,7 @@ impl Connection {
 
                 let stream_buf = stream.send.pop(stream_len)?;
 
-                if stream_buf.is_empty() {
+                if stream_buf.is_empty() && !stream_buf.fin() {
                     continue;
                 }
 
@@ -2011,11 +2011,14 @@ impl Connection {
 
         let sent = stream.send.push_slice(buf, fin)?;
 
+        // TODO: find a better way to check flushability on zero-length write
+        let flushable = stream.is_flushable() || (buf.is_empty() && fin);
+
         let writable = stream.is_writable();
 
         // If the stream is now flushable push it to the flushable queue, but
         // only if it wasn't already queued.
-        if stream.is_flushable() && !was_flushable {
+        if flushable && !was_flushable {
             self.streams.push_flushable(stream_id);
         }
 
@@ -2548,9 +2551,13 @@ impl Connection {
                 // Get existing stream or create a new one.
                 let stream = self.get_or_create_stream(stream_id, false)?;
 
+                // TODO: find a better way to check readability on zero-length
+                // frames
+                let empty_fin = data.is_empty() && data.fin();
+
                 stream.recv.push(data)?;
 
-                if stream.is_readable() {
+                if stream.is_readable() || empty_fin {
                     self.streams.mark_readable(stream_id, true);
                 }
 
@@ -4382,6 +4389,39 @@ mod tests {
         let mut r = pipe.server.readable();
         assert!(r.next().is_some());
         assert!(r.next().is_some());
+        assert!(r.next().is_none());
+    }
+
+    #[test]
+    /// Tests that the stream's fin flag is properly flushed even if there's no
+    /// data in the buffer, and that the buffer becomes readable on the other
+    /// side.
+    fn stream_zero_length_fin() {
+        let mut buf = [0; 65535];
+
+        let mut pipe = testing::Pipe::default().unwrap();
+
+        assert_eq!(pipe.handshake(&mut buf), Ok(()));
+
+        assert_eq!(
+            pipe.client.stream_send(0, b"aaaaaaaaaaaaaaa", false),
+            Ok(15)
+        );
+        assert_eq!(pipe.advance(&mut buf), Ok(()));
+
+        let mut r = pipe.server.readable();
+        assert_eq!(r.next(), Some(0));
+        assert!(r.next().is_none());
+
+        let mut b = [0; 15];
+        pipe.server.stream_recv(0, &mut b).unwrap();
+        assert_eq!(pipe.advance(&mut buf), Ok(()));
+
+        assert_eq!(pipe.client.stream_send(0, b"", true), Ok(0));
+        assert_eq!(pipe.advance(&mut buf), Ok(()));
+
+        let mut r = pipe.server.readable();
+        assert_eq!(r.next(), Some(0));
         assert!(r.next().is_none());
     }
 }
