@@ -372,7 +372,7 @@ fn main() {
                             handle_request(
                                 client,
                                 stream_id,
-                                &headers,
+                                &headers.list,
                                 args.get_str("--root"),
                             );
                         },

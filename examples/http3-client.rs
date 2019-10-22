@@ -333,6 +333,16 @@ fn main() {
                             "got response headers {:?} on stream id {}",
                             headers, stream_id
                         );
+
+                        if process_stream_finished(
+                            headers.fin,
+                            &mut conn,
+                            &mut reqs_complete,
+                            reqs_count,
+                            req_start,
+                        ) {
+                            break;
+                        }
                     },
 
                     Ok((stream_id, quiche::h3::Event::Data)) => {
@@ -347,35 +357,29 @@ fn main() {
                             print!("{}", unsafe {
                                 std::str::from_utf8_unchecked(&buf[..read])
                             });
-                        }
-                    },
 
-                    Ok((_stream_id, quiche::h3::Event::Finished)) => {
-                        reqs_complete += 1;
-
-                        debug!(
-                            "{}/{} responses received",
-                            reqs_complete, reqs_count
-                        );
-
-                        if reqs_complete == reqs_count {
-                            info!(
-                                "{}/{} response(s) received in {:?}, closing...",
-                                reqs_complete,
+                            if process_stream_finished(
+                                false,
+                                &mut conn,
+                                &mut reqs_complete,
                                 reqs_count,
-                                req_start.elapsed()
-                            );
-
-                            match conn.close(true, 0x00, b"kthxbye") {
-                                // Already closed.
-                                Ok(_) | Err(quiche::Error::Done) => (),
-
-                                Err(e) => panic!("error closing conn: {:?}", e),
+                                req_start,
+                            ) {
+                                break;
                             }
-
-                            break;
                         }
                     },
+
+                    Ok((_stream_id, quiche::h3::Event::Finished)) =>
+                        if process_stream_finished(
+                            true,
+                            &mut conn,
+                            &mut reqs_complete,
+                            reqs_count,
+                            req_start,
+                        ) {
+                            break;
+                        },
 
                     Err(quiche::h3::Error::Done) => {
                         break;
@@ -438,4 +442,37 @@ fn hex_dump(buf: &[u8]) -> String {
     let vec: Vec<String> = buf.iter().map(|b| format!("{:02x}", b)).collect();
 
     vec.join("")
+}
+
+fn process_stream_finished(
+    fin: bool, conn: &mut quiche::Connection, reqs_complete: &mut u64,
+    reqs_count: u64, req_start: std::time::Instant,
+) -> bool {
+    if !fin {
+        return false;
+    }
+
+    *reqs_complete += 1;
+
+    debug!("{}/{} responses received", reqs_complete, reqs_count);
+
+    if *reqs_complete == reqs_count {
+        info!(
+            "{}/{} response(s) received in {:?}, closing...",
+            reqs_complete,
+            reqs_count,
+            req_start.elapsed()
+        );
+
+        match conn.close(true, 0x00, b"kthxbye") {
+            // Already closed.
+            Ok(_) | Err(quiche::Error::Done) => (),
+
+            Err(e) => panic!("error closing conn: {:?}", e),
+        }
+
+        return true;
+    }
+
+    false
 }

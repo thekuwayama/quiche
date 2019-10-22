@@ -122,11 +122,11 @@ pub extern fn quiche_h3_event_for_each_header(
 
         argp: *mut c_void,
     ) -> c_int,
-    argp: *mut c_void,
+    argp: *mut c_void, fin: &mut bool,
 ) -> c_int {
     match ev {
         h3::Event::Headers(headers) =>
-            for h in headers {
+            for h in &headers.list {
                 let rc = cb(
                     h.name().as_ptr(),
                     h.name().len(),
@@ -134,6 +134,8 @@ pub extern fn quiche_h3_event_for_each_header(
                     h.value().len(),
                     argp,
                 );
+
+                *fin = headers.fin;
 
                 if rc != 0 {
                     return rc;

@@ -212,10 +212,10 @@ pub fn run(
                     Ok((stream_id, quiche::h3::Event::Headers(headers))) => {
                         info!(
                             "got response headers {:?} on stream id {}",
-                            headers, stream_id
+                            &headers.list, stream_id
                         );
 
-                        test.add_response_headers(stream_id, &headers);
+                        test.add_response_headers(stream_id, &headers.list);
                     },
 
                     Ok((stream_id, quiche::h3::Event::Data)) => {

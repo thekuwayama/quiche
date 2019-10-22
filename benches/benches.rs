@@ -93,7 +93,7 @@ fn http3(c: &mut Criterion) {
 
     let mut config = make_bench_config();
 
-    let h3_config = quiche::h3::Config::new().unwrap();
+    let mut h3_config = quiche::h3::Config::new().unwrap();
 
     let mut s =
         quiche::h3::testing::Session::with_configs(&mut config, &mut h3_config)
@@ -132,7 +132,7 @@ fn http3(c: &mut Criterion) {
                     s.pipe.flush_client(&mut buf).unwrap();
 
                     match s.server.poll(&mut s.pipe.server) {
-                        Ok((stream, quiche::h3::Event::Headers(_))) => {
+                        Ok((stream, quiche::h3::Event::Headers(_), _)) => {
                             s.server
                                 .send_response(
                                     &mut s.pipe.server,
@@ -159,7 +159,7 @@ fn http3(c: &mut Criterion) {
 
                     while let Ok(ev) = s.client.poll(&mut s.pipe.client) {
                         match ev {
-                            (stream_id, quiche::h3::Event::Data) => {
+                            (stream_id, quiche::h3::Event::Data, _) => {
                                 let b = &mut recv_buf[recv_len..size];
 
                                 if let Ok(r) = s.client.recv_body(

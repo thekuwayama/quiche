@@ -342,6 +342,7 @@ static void recv_cb(EV_P_ ev_io *w, int revents) {
 
         if (quiche_conn_is_established(conn_io->conn)) {
             quiche_h3_event *ev;
+            bool fin = false;
 
             if (conn_io->http3 == NULL) {
                 conn_io->http3 = quiche_h3_conn_new_with_transport(conn_io->conn,
@@ -365,7 +366,7 @@ static void recv_cb(EV_P_ ev_io *w, int revents) {
                     case QUICHE_H3_EVENT_HEADERS: {
                         int rc = quiche_h3_event_for_each_header(ev,
                                                                  for_each_header,
-                                                                 NULL);
+                                                                 NULL, &fin);
 
                         if (rc != 0) {
                             fprintf(stderr, "failed to process headers\n");

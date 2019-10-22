@@ -358,7 +358,8 @@ int quiche_h3_event_for_each_header(quiche_h3_event *ev,
                                     int (*cb)(uint8_t *name, size_t name_len,
                                               uint8_t *value, size_t value_len,
                                               void *argp),
-                                    void *argp);
+                                    void *argp,
+                                    bool *fin);
 
 // Frees the HTTP/3 event object.
 void quiche_h3_event_free(quiche_h3_event *ev);

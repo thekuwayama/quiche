@@ -1545,7 +1545,7 @@ new file mode 100644
 index 000000000..11b791115
 --- /dev/null
 +++ b/src/http/v3/ngx_http_v3.c
-@@ -0,0 +1,2090 @@
+@@ -0,0 +1,2093 @@
 +
 +/*
 + * Copyright (C) Cloudflare, Inc.
@@ -1805,6 +1805,7 @@ index 000000000..11b791115
 +    ngx_http_v3_stream_t      *stream;
 +    ngx_http_v3_srv_conf_t    *h3scf;
 +    ngx_http_v3_connection_t  *h3c;
++    bool                       fin;
 +
 +    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "http3 process headers");
 +
@@ -1835,7 +1836,7 @@ index 000000000..11b791115
 +
 +    /* Populate ngx_http_request_t from raw HTTP/3 headers. */
 +    rc = quiche_h3_event_for_each_header(ev,
-+        ngx_http_v3_for_each_header, stream->request);
++        ngx_http_v3_for_each_header, stream->request, &fin);
 +
 +    if (rc != NGX_OK) {
 +        ngx_log_error(NGX_LOG_ERR, c->log, 0,
@@ -1844,6 +1845,8 @@ index 000000000..11b791115
 +        ngx_http_v3_finalize_connection(h3c, NGX_HTTP_V3_INTERNAL_ERROR);
 +        return;
 +    }
++
++    stream->in_closed = fin;
 +
 +    ngx_http_v3_run_request(stream->request);
 +}

@@ -130,7 +130,7 @@
 //! loop {
 //!     match h3_conn.poll(&mut conn) {
 //!         Ok((stream_id, quiche::h3::Event::Headers(headers))) => {
-//!             let mut headers = headers.into_iter();
+//!             let mut headers = headers.list.into_iter();
 //!
 //!             // Look for the request's method.
 //!             let method = headers.find(|h| h.name() == ":method").unwrap();
@@ -183,7 +183,7 @@
 //! loop {
 //!     match h3_conn.poll(&mut conn) {
 //!         Ok((stream_id, quiche::h3::Event::Headers(headers))) => {
-//!             let status = headers.iter().find(|h| h.name() == ":status").unwrap();
+//!             let status = headers.list.iter().find(|h| h.name() == ":status").unwrap();
 //!             println!("Received {} response on stream {}",
 //!                      status.value(), stream_id);
 //!         },
@@ -490,11 +490,23 @@ impl Header {
     }
 }
 
+/// Structure for `Event::Headers`
+///
+/// [`Event`]: enum.Event.html#Headers
+#[derive(Clone, Debug, PartialEq)]
+pub struct Headers {
+    /// Represents a Header list.
+    pub list: Vec<Header>,
+
+    /// Indicate if the Headers finish the stream
+    pub fin: bool,
+}
+
 /// An HTTP/3 connection event.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// Request/response headers were received.
-    Headers(Vec<Header>),
+    Headers(Headers),
 
     /// Data was received.
     ///
@@ -1283,7 +1295,12 @@ impl Connection {
                         _ => Error::QpackDecompressionFailed,
                     })?;
 
-                return Ok((stream_id, Event::Headers(headers)));
+                let fin = conn.stream_finished(stream_id);
+
+                return Ok((
+                    stream_id,
+                    Event::Headers(Headers { list: headers, fin }),
+                ));
             },
 
             frame::Frame::Data { .. } => {
@@ -1721,12 +1738,22 @@ mod tests {
 
         assert_eq!(stream, 0);
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Ok((stream, Event::Finished)));
 
         let resp = s.send_response(stream, true).unwrap();
 
-        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(resp))));
+        let hdrs = Headers {
+            list: resp,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_client(), Ok((stream, Event::Finished)));
         assert_eq!(s.poll_client(), Err(Error::Done));
     }
@@ -1740,7 +1767,13 @@ mod tests {
         let (stream, req) = s.send_request(true).unwrap();
         assert_eq!(stream, 0);
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
+
         assert_eq!(s.poll_server(), Ok((stream, Event::Finished)));
 
         let resp = s.send_response(stream, false).unwrap();
@@ -1749,7 +1782,12 @@ mod tests {
 
         let mut recv_buf = vec![0; body.len()];
 
-        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(resp))));
+        let hdrs = Headers {
+            list: resp,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(hdrs))));
 
         assert_eq!(s.poll_client(), Ok((stream, Event::Data)));
         assert_eq!(s.recv_body_client(stream, &mut recv_buf), Ok(body.len()));
@@ -1766,7 +1804,12 @@ mod tests {
 
         let (stream, req) = s.send_request(true).unwrap();
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Ok((stream, Event::Finished)));
 
         let total_data_frames = 4;
@@ -1781,7 +1824,12 @@ mod tests {
 
         let mut recv_buf = vec![0; body.len()];
 
-        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(resp))));
+        let hdrs = Headers {
+            list: resp,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(hdrs))));
 
         for _ in 0..total_data_frames {
             assert_eq!(s.poll_client(), Ok((stream, Event::Data)));
@@ -1804,7 +1852,12 @@ mod tests {
 
         let mut recv_buf = vec![0; body.len()];
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
 
         assert_eq!(s.poll_server(), Ok((stream, Event::Data)));
         assert_eq!(s.recv_body_server(stream, &mut recv_buf), Ok(body.len()));
@@ -1813,7 +1866,12 @@ mod tests {
 
         let resp = s.send_response(stream, true).unwrap();
 
-        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(resp))));
+        let hdrs = Headers {
+            list: resp,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_client(), Ok((stream, Event::Finished)));
     }
 
@@ -1835,7 +1893,12 @@ mod tests {
 
         let mut recv_buf = vec![0; body.len()];
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
 
         for _ in 0..total_data_frames {
             assert_eq!(s.poll_server(), Ok((stream, Event::Data)));
@@ -1846,7 +1909,12 @@ mod tests {
 
         let resp = s.send_response(stream, true).unwrap();
 
-        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(resp))));
+        let hdrs = Headers {
+            list: resp,
+            fin: true,
+        };
+
+        assert_eq!(s.poll_client(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_client(), Ok((stream, Event::Finished)));
     }
 
@@ -1885,7 +1953,11 @@ mod tests {
 
         for _ in 0..reqs.len() {
             let (stream, ev) = s.poll_server().unwrap();
-            assert_eq!(ev, Event::Headers(reqs[(stream / 4) as usize].clone()));
+            let hdrs = Headers {
+                list: reqs[(stream / 4) as usize].clone(),
+                fin: false,
+            };
+            assert_eq!(ev, Event::Headers(hdrs));
             assert_eq!(s.poll_server(), Ok((stream, Event::Data)));
             assert_eq!(s.recv_body_server(stream, &mut recv_buf), Ok(body.len()));
             assert_eq!(s.poll_server(), Ok((stream, Event::Data)));
@@ -1908,7 +1980,11 @@ mod tests {
 
         for _ in 0..resps.len() {
             let (stream, ev) = s.poll_client().unwrap();
-            assert_eq!(ev, Event::Headers(resps[(stream / 4) as usize].clone()));
+            let hdrs = Headers {
+                list: resps[(stream / 4) as usize].clone(),
+                fin: true,
+            };
+            assert_eq!(ev, Event::Headers(hdrs));
             assert_eq!(s.poll_client(), Ok((stream, Event::Finished)));
         }
 
@@ -1998,7 +2074,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Err(Error::FrameUnexpected));
     }
 
@@ -2062,7 +2143,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Err(Error::FrameUnexpected));
     }
 
@@ -2097,7 +2183,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Err(Error::FrameUnexpected));
     }
 
@@ -2132,7 +2223,12 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
         assert_eq!(s.poll_server(), Err(Error::FrameUnexpected));
     }
 
@@ -2412,7 +2508,12 @@ mod tests {
 
         let mut recv_buf = vec![0; bytes.len()];
 
-        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(req))));
+        let hdrs = Headers {
+            list: req,
+            fin: false,
+        };
+
+        assert_eq!(s.poll_server(), Ok((stream, Event::Headers(hdrs))));
 
         for _ in 0..total_data_frames {
             assert_eq!(s.poll_server(), Ok((stream, Event::Data)));

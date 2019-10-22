@@ -157,11 +157,11 @@
 //! # let h3_config = quiche::h3::Config::new()?;
 //! # let mut http3_conn = quiche::h3::Connection::with_transport(&mut conn, &h3_config)?;
 //! match http3_conn.poll(&mut conn) {
-//!     Ok((stream_id, quiche::h3::Event::Headers(headers))) => {
+//!     Ok((stream_id, quiche::h3::Event::Headers(headers), _)) => {
 //!         test.add_response_headers(stream_id, &headers);
 //!     },
 //!
-//!     Ok((stream_id, quiche::h3::Event::Data)) => {
+//!     Ok((stream_id, quiche::h3::Event::Data, _)) => {
 //!         let mut buf = [0; 65535];
 //!         if let Ok(read) = http3_conn.recv_body(&mut conn, stream_id, &mut buf)
 //!         {
@@ -199,7 +199,7 @@
 //! let mut requests_complete = 0;
 //! let request_count = test.requests_count();
 //! match http3_conn.poll(&mut conn) {
-//!     Ok((_stream_id, quiche::h3::Event::Finished)) => {
+//!     Ok((_stream_id, quiche::h3::Event::Finished, _)) => {
 //!         requests_complete += 1;
 //!         if requests_complete == request_count {
 //!             test.assert()
