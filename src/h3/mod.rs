@@ -495,10 +495,10 @@ impl Header {
 /// [`Event`]: enum.Event.html#Headers
 #[derive(Clone, Debug, PartialEq)]
 pub struct Headers {
-    /// Represents a Header list.
+    /// The list of headers.
     pub list: Vec<Header>,
 
-    /// Indicate if the Headers finish the stream
+    /// Indicates if the Headers finish the stream.
     pub fin: bool,
 }
 
