@@ -506,7 +506,13 @@ pub struct Headers {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// Request/response headers were received.
-    Headers(Headers),
+    Headers {
+        /// Represents a Header list.
+        pub list: Vec<Header>,
+
+        /// Indicate if the Headers finish the stream
+        pub fin: bool,
+    },
 
     /// Data was received.
     ///
